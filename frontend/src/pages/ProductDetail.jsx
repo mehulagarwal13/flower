@@ -55,21 +55,59 @@ function FlowerCustomiser({ options, onChange }) {
 }
 
 function ChocCustomiser({ options, onChange }) {
-  const [tier, setTier] = useState(options.tiers[0]);
+  const [selectedBrands, setSelectedBrands] = useState({});
   const [wrap, setWrap] = useState(options.wrapping[0]);
-  const price = tier.price + wrap.price;
-  const update = (t, w) => onChange({ tier: t.id, wrap: w.id, label: `${t.label} + ${w.label}` }, t.price + w.price);
+
+  const brandsPrice = Object.entries(selectedBrands).reduce((acc, [id, qty]) => {
+    const brand = options.brands.find(b => b.id === id);
+    return acc + (brand ? brand.price * qty : 0);
+  }, 0);
+
+  const price = options.baseCost + brandsPrice + wrap.price;
+
+  const updateBrand = (id, delta) => {
+    const newBrands = { ...selectedBrands };
+    newBrands[id] = Math.max(0, (newBrands[id] || 0) + delta);
+    if (newBrands[id] === 0) delete newBrands[id];
+    setSelectedBrands(newBrands);
+    
+    const brandsLabel = Object.entries(newBrands)
+      .map(([bid, bqty]) => `${options.brands.find(b => b.id === bid).label} x${bqty}`)
+      .join(', ');
+    
+    onChange({ 
+      brands: newBrands, 
+      wrap: wrap.id, 
+      label: `Chocolates: ${brandsLabel || 'None'} | Wrap: ${wrap.label}` 
+    }, options.baseCost + Object.entries(newBrands).reduce((acc, [bid, bqty]) => acc + (options.brands.find(b => b.id === bid).price * bqty), 0) + wrap.price);
+  };
+
+  const handleWrapChange = (w) => {
+    setWrap(w);
+    onChange({ 
+      brands: selectedBrands, 
+      wrap: w.id, 
+      label: `Chocolates: ${Object.entries(selectedBrands).map(([bid, bqty]) => `${options.brands.find(b => b.id === bid).label} x${bqty}`).join(', ') || 'None'} | Wrap: ${w.label}` 
+    }, options.baseCost + brandsPrice + w.price);
+  };
 
   return (
     <div className="customiser">
       <div className="form-group">
-        <label className="form-label">Chocolate Tier</label>
-        <div className="option-chips">
-          {options.tiers.map((t) => (
-            <button key={t.id}
-              className={`option-chip ${tier.id === t.id ? 'option-chip--active' : ''}`}
-              onClick={() => { setTier(t); update(t, wrap); }}
-            >{t.label} <span>₹{t.price}</span></button>
+        <label className="form-label">Select Chocolates & Quantity</label>
+        <div className="brand-list">
+          {options.brands.map((b) => (
+            <div key={b.id} className="brand-item">
+              <div className="brand-info">
+                <span className="brand-name">{b.label}</span>
+                <span className="brand-price">₹{b.price} /pc</span>
+              </div>
+              <div className="qty-row">
+                <button className="qty-btn" onClick={() => updateBrand(b.id, -1)}><Minus size={14} /></button>
+                <span className="qty-val">{selectedBrands[b.id] || 0}</span>
+                <button className="qty-btn" onClick={() => updateBrand(b.id, 1)}><Plus size={14} /></button>
+              </div>
+            </div>
           ))}
         </div>
       </div>
@@ -79,11 +117,12 @@ function ChocCustomiser({ options, onChange }) {
           {options.wrapping.map((w) => (
             <button key={w.id}
               className={`option-chip ${wrap.id === w.id ? 'option-chip--active' : ''}`}
-              onClick={() => { setWrap(w); update(tier, w); }}
+              onClick={() => handleWrapChange(w)}
             >{w.label} <span>+₹{w.price}</span></button>
           ))}
         </div>
       </div>
+      <p className="form-hint">Base craft fee (stick, foam, etc.): ₹{options.baseCost}</p>
       <div className="price-display">Total: <span>₹{price}</span></div>
     </div>
   );
@@ -96,11 +135,11 @@ function FrameCustomiser({ options, onChange }) {
   const [files, setFiles] = useState([]);
 
   const sheets = Math.ceil(photos / options.photosPerSheet);
-  const price = size.basePrice + sheets * options.photoSheetPrice;
+  const price = size.basePrice + (sheets * options.photoSheetPrice) + options.otherPastingStuff;
 
   const update = (s, p, m) => {
     const sh = Math.ceil(p / options.photosPerSheet);
-    const pr = s.basePrice + sh * options.photoSheetPrice;
+    const pr = s.basePrice + (sh * options.photoSheetPrice) + options.otherPastingStuff;
     onChange({ size: s.id, photos: p, moulding: m, label: `${s.label} – ${p} photos – ${m}` }, pr);
   };
 

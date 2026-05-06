@@ -38,6 +38,7 @@ class OrderItem(BaseModel):
     price: float
     quantity: int
     cartKey: Optional[str] = None
+    options: Optional[dict] = None
 
 
 class OrderCreate(BaseModel):
