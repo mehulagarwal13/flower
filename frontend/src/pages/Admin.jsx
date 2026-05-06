@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Package, FileImage, LogOut, Clock, CheckCircle, Truck, Layers3 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, FileImage, LogOut, Clock, CheckCircle, Truck, Layers3, Upload, X } from 'lucide-react';
 import { adminAPI } from '../api';
+import { uploadImage, uploadMultipleImages } from '../utils/cloudinary';
 import './Admin.css';
 
 const STATUS_OPTIONS = ['Received', 'In Progress', 'Ready', 'Delivered'];
@@ -62,6 +63,8 @@ export default function Admin() {
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [editingProductId, setEditingProductId] = useState('');
   const [productForm, setProductForm] = useState(emptyProductForm());
+  const [uploadedImages, setUploadedImages] = useState([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   const selectedOrder = useMemo(
     () => orders.find((order) => order.order_id === selectedOrderId) || null,
@@ -124,7 +127,45 @@ export default function Admin() {
       optionsText: JSON.stringify(product.options || {}, null, 2),
       is_active: Boolean(product.is_active),
     });
+    setUploadedImages(Array.isArray(product.images) ? product.images : []);
     setActiveTab('products');
+  };
+
+  const handleImageUpload = async (files) => {
+    if (!files || files.length === 0) return;
+    
+    setUploadingImages(true);
+    try {
+      const uploadResults = await uploadMultipleImages(files, {
+        folder: 'bouquetoflove/products',
+        tags: ['product', 'admin-upload']
+      });
+      
+      const newImageUrls = uploadResults.map(result => result.url);
+      setUploadedImages(prev => [...prev, ...newImageUrls]);
+      
+      // Update the images text field
+      const allImages = [...uploadedImages, ...newImageUrls];
+      setProductForm(prev => ({
+        ...prev,
+        imagesText: allImages.join(', ')
+      }));
+      
+    } catch (error) {
+      setError('Failed to upload images. Please try again.');
+      console.error('Image upload error:', error);
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const removeUploadedImage = (index) => {
+    const newImages = uploadedImages.filter((_, i) => i !== index);
+    setUploadedImages(newImages);
+    setProductForm(prev => ({
+      ...prev,
+      imagesText: newImages.join(', ')
+    }));
   };
 
   const handleSubmitProduct = async (e) => {
@@ -208,6 +249,26 @@ export default function Admin() {
     { label: 'Pending Orders', value: orders.filter((o) => o.status !== 'Delivered').length, icon: <Clock size={18} /> },
   ];
 
+  const analytics = useMemo(() => {
+    const totalRevenue = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+    const deliveredOrders = orders.filter(o => o.status === 'Delivered').length;
+    const averageOrderValue = orders.length > 0 ? totalRevenue / orders.length : 0;
+    const recentOrders = orders.filter(o => {
+      const orderDate = new Date(o.created_at);
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
+      return orderDate > weekAgo;
+    }).length;
+
+    return {
+      totalRevenue,
+      deliveredOrders,
+      averageOrderValue,
+      recentOrders,
+      completionRate: orders.length > 0 ? (deliveredOrders / orders.length) * 100 : 0
+    };
+  }, [orders]);
+
   if (loading) {
     return <div className="admin-loading">Loading dashboard...</div>;
   }
@@ -256,6 +317,28 @@ export default function Admin() {
       {activeTab === 'overview' && (
         <div className="admin-panel">
           <div className="admin-card card">
+            <h3>📊 Business Analytics</h3>
+            <div className="analytics-grid">
+              <div className="analytics-item">
+                <div className="analytics-label">Total Revenue</div>
+                <div className="analytics-value">₹{analytics.totalRevenue.toLocaleString()}</div>
+              </div>
+              <div className="analytics-item">
+                <div className="analytics-label">Average Order Value</div>
+                <div className="analytics-value">₹{Math.round(analytics.averageOrderValue)}</div>
+              </div>
+              <div className="analytics-item">
+                <div className="analytics-label">Completion Rate</div>
+                <div className="analytics-value">{analytics.completionRate.toFixed(1)}%</div>
+              </div>
+              <div className="analytics-item">
+                <div className="analytics-label">Orders This Week</div>
+                <div className="analytics-value">{analytics.recentOrders}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-card card">
             <h3>Quick Actions</h3>
             <div className="admin-form-actions">
               <button className="btn btn-primary" onClick={() => setActiveTab('products')}>
@@ -266,7 +349,7 @@ export default function Admin() {
               </button>
             </div>
             <p className="admin-muted" style={{ marginTop: '1rem' }}>
-              Admin can create products, edit image URLs, update order status, and remove records from here.
+              Admin can create products, upload images, update order status, and manage orders from here.
             </p>
           </div>
 
@@ -279,6 +362,7 @@ export default function Admin() {
                     <div>
                       <strong>{order.order_id}</strong>
                       <div className="admin-mini-card__meta">{order.customer_name} · {order.customer_phone}</div>
+                      <div className="admin-mini-card__meta">₹{order.total || 0}</div>
                     </div>
                     <span className="admin-pill">{order.status}</span>
                   </div>
@@ -326,13 +410,53 @@ export default function Admin() {
                 <input className="form-input" type="number" min="0" value={productForm.base_price} onChange={(e) => setProductForm((p) => ({ ...p, base_price: e.target.value }))} required />
               </div>
               <div className="form-group full">
-                <label className="form-label">Cloudinary Image URLs</label>
+                <label className="form-label">Product Images</label>
+                <div className="admin-image-upload">
+                  <div className="admin-upload-area">
+                    <input
+                      type="file"
+                      id="admin-image-upload"
+                      multiple
+                      accept="image/*"
+                      onChange={(e) => handleImageUpload(e.target.files)}
+                      style={{ display: 'none' }}
+                    />
+                    <label htmlFor="admin-image-upload" className="admin-upload-btn">
+                      <Upload size={20} />
+                      {uploadingImages ? 'Uploading...' : 'Upload Images'}
+                    </label>
+                  </div>
+                  
+                  {uploadedImages.length > 0 && (
+                    <div className="admin-uploaded-images">
+                      <h4>Uploaded Images ({uploadedImages.length})</h4>
+                      <div className="admin-image-grid">
+                        {uploadedImages.map((url, index) => (
+                          <div key={index} className="admin-image-item">
+                            <img src={url} alt={`Product ${index + 1}`} />
+                            <button
+                              type="button"
+                              className="admin-image-remove"
+                              onClick={() => removeUploadedImage(index)}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="form-group full">
+                <label className="form-label">Cloudinary Image URLs (Manual)</label>
                 <input
                   className="form-input"
                   value={productForm.imagesText}
                   onChange={(e) => setProductForm((p) => ({ ...p, imagesText: e.target.value }))}
                   placeholder="https://res.cloudinary.com/.../image1.jpg, https://res.cloudinary.com/.../image2.jpg"
                 />
+                <small className="form-hint">You can upload images above or manually enter Cloudinary URLs here</small>
               </div>
               <div className="form-group full">
                 <label className="form-label">Options JSON</label>

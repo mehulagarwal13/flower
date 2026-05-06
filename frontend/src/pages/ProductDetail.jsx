@@ -18,13 +18,45 @@ import './ProductDetail.css';
 function FlowerCustomiser({ options, onChange }) {
   const [type, setType] = useState(options.types[0]);
   const [size, setSize] = useState(options.sizes[0]);
+  const [addOns, setAddOns] = useState({});
   const [note, setNote] = useState('');
 
-  const price = Math.round(type.price * size.multiplier);
+  const basePrice = Math.round(type.price * size.multiplier);
+  const addOnPrice = Object.entries(addOns).reduce((acc, [id, selected]) => {
+    if (selected) {
+      const addOn = options.addOns?.find(a => a.id === id);
+      return acc + (addOn ? addOn.price : 0);
+    }
+    return acc;
+  }, 0);
+  const price = basePrice + addOnPrice;
 
-  const update = (t, s, n) => {
-    const newPrice = Math.round(t.price * s.multiplier);
-    onChange({ type: t.id, size: s.id, note: n, label: `${t.label} – ${s.label}` }, newPrice);
+  const update = (t, s, a, n) => {
+    const newBasePrice = Math.round(t.price * s.multiplier);
+    const newAddOnPrice = Object.entries(a).reduce((acc, [id, selected]) => {
+      if (selected) {
+        const addOn = options.addOns?.find(ao => ao.id === id);
+        return acc + (addOn ? addOn.price : 0);
+      }
+      return acc;
+    }, 0);
+    const newPrice = newBasePrice + newAddOnPrice;
+    
+    const addOnLabels = Object.entries(a)
+      .filter(([_, selected]) => selected)
+      .map(([id]) => options.addOns?.find(ao => ao.id === id)?.label)
+      .filter(Boolean)
+      .join(', ');
+    
+    const label = `${t.label} – ${s.label}${addOnLabels ? ' + ' + addOnLabels : ''}`;
+    
+    onChange({ type: t.id, size: s.id, addOns: a, note: n, label }, newPrice);
+  };
+
+  const toggleAddOn = (id) => {
+    const newAddOns = { ...addOns, [id]: !addOns[id] };
+    setAddOns(newAddOns);
+    update(type, size, newAddOns, note);
   };
 
   return (
@@ -35,8 +67,9 @@ function FlowerCustomiser({ options, onChange }) {
           {options.types.map((t) => (
             <button key={t.id}
               className={`option-chip ${type.id === t.id ? 'option-chip--active' : ''}`}
-              onClick={() => { setType(t); update(t, size, note); }}
-            >{t.label} <span>₹{t.price}</span></button>
+              onClick={() => { setType(t); update(t, size, addOns, note); }}>
+              {t.label} <span>₹{t.price}</span>
+            </button>
           ))}
         </div>
       </div>
@@ -46,14 +79,31 @@ function FlowerCustomiser({ options, onChange }) {
           {options.sizes.map((s) => (
             <button key={s.id}
               className={`option-chip ${size.id === s.id ? 'option-chip--active' : ''}`}
-              onClick={() => { setSize(s); update(type, s, note); }}
-            >{s.label}</button>
+              onClick={() => { setSize(s); update(type, s, addOns, note); }}>
+              {s.label}
+            </button>
           ))}
         </div>
       </div>
+      {options.addOns && (
+        <div className="form-group">
+          <label className="form-label">Add Extras</label>
+          <div className="addon-chips">
+            {options.addOns.map((addOn) => (
+              <button key={addOn.id}
+                className={`addon-chip ${addOns[addOn.id] ? 'addon-chip--active' : ''}`}
+                onClick={() => toggleAddOn(addOn.id)}>
+                {addOn.label} <span>+₹{addOn.price}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="form-group">
         <label className="form-label">Special Instructions (optional)</label>
-        <textarea className="form-textarea" value={note} onChange={(e) => { setNote(e.target.value); update(type, size, e.target.value); }} placeholder="Any special requests?" />
+        <textarea className="form-textarea" value={note} 
+          onChange={(e) => { setNote(e.target.value); update(type, size, addOns, e.target.value); }} 
+          placeholder="Any special requests?" />
       </div>
       <div className="price-display">Total: <span>₹{price}</span></div>
     </div>
@@ -63,13 +113,22 @@ function FlowerCustomiser({ options, onChange }) {
 function ChocCustomiser({ options, onChange }) {
   const [selectedBrands, setSelectedBrands] = useState({});
   const [wrap, setWrap] = useState(options.wrapping[0]);
+  const [addOns, setAddOns] = useState({});
 
   const brandsPrice = Object.entries(selectedBrands).reduce((acc, [id, qty]) => {
     const brand = options.brands.find(b => b.id === id);
     return acc + (brand ? brand.price * qty : 0);
   }, 0);
 
-  const price = options.baseCost + brandsPrice + wrap.price;
+  const addOnPrice = Object.entries(addOns).reduce((acc, [id, selected]) => {
+    if (selected) {
+      const addOn = options.addOns?.find(a => a.id === id);
+      return acc + (addOn ? addOn.price : 0);
+    }
+    return acc;
+  }, 0);
+
+  const price = options.baseCost + brandsPrice + wrap.price + addOnPrice;
 
   const updateBrand = (id, delta) => {
     const newBrands = { ...selectedBrands };
@@ -81,20 +140,75 @@ function ChocCustomiser({ options, onChange }) {
       .map(([bid, bqty]) => `${options.brands.find(b => b.id === bid).label} x${bqty}`)
       .join(', ');
     
+    const addOnLabels = Object.entries(addOns)
+      .filter(([_, selected]) => selected)
+      .map(([id]) => options.addOns?.find(ao => ao.id === id)?.label)
+      .filter(Boolean)
+      .join(', ');
+    
+    const label = `Chocolates: ${brandsLabel || 'None'} | Wrap: ${wrap.label}${addOnLabels ? ' + ' + addOnLabels : ''}`;
+    
     onChange({ 
       brands: newBrands, 
       wrap: wrap.id, 
-      label: `Chocolates: ${brandsLabel || 'None'} | Wrap: ${wrap.label}` 
-    }, options.baseCost + Object.entries(newBrands).reduce((acc, [bid, bqty]) => acc + (options.brands.find(b => b.id === bid).price * bqty), 0) + wrap.price);
+      addOns,
+      label
+    }, options.baseCost + Object.entries(newBrands).reduce((acc, [bid, bqty]) => acc + (options.brands.find(b => b.id === bid).price * bqty), 0) + wrap.price + addOnPrice);
   };
 
   const handleWrapChange = (w) => {
     setWrap(w);
+    
+    const brandsLabel = Object.entries(selectedBrands)
+      .map(([bid, bqty]) => `${options.brands.find(b => b.id === bid).label} x${bqty}`)
+      .join(', ');
+    
+    const addOnLabels = Object.entries(addOns)
+      .filter(([_, selected]) => selected)
+      .map(([id]) => options.addOns?.find(ao => ao.id === id)?.label)
+      .filter(Boolean)
+      .join(', ');
+    
+    const label = `Chocolates: ${brandsLabel || 'None'} | Wrap: ${w.label}${addOnLabels ? ' + ' + addOnLabels : ''}`;
+    
     onChange({ 
       brands: selectedBrands, 
       wrap: w.id, 
-      label: `Chocolates: ${Object.entries(selectedBrands).map(([bid, bqty]) => `${options.brands.find(b => b.id === bid).label} x${bqty}`).join(', ') || 'None'} | Wrap: ${w.label}` 
-    }, options.baseCost + brandsPrice + w.price);
+      addOns,
+      label
+    }, options.baseCost + brandsPrice + w.price + addOnPrice);
+  };
+
+  const toggleAddOn = (id) => {
+    const newAddOns = { ...addOns, [id]: !addOns[id] };
+    setAddOns(newAddOns);
+    
+    const brandsLabel = Object.entries(selectedBrands)
+      .map(([bid, bqty]) => `${options.brands.find(b => b.id === bid).label} x${bqty}`)
+      .join(', ');
+    
+    const addOnLabels = Object.entries(newAddOns)
+      .filter(([_, selected]) => selected)
+      .map(([id]) => options.addOns?.find(ao => ao.id === id)?.label)
+      .filter(Boolean)
+      .join(', ');
+    
+    const label = `Chocolates: ${brandsLabel || 'None'} | Wrap: ${wrap.label}${addOnLabels ? ' + ' + addOnLabels : ''}`;
+    
+    const newAddOnPrice = Object.entries(newAddOns).reduce((acc, [id, selected]) => {
+      if (selected) {
+        const addOn = options.addOns?.find(ao => ao.id === id);
+        return acc + (addOn ? addOn.price : 0);
+      }
+      return acc;
+    }, 0);
+    
+    onChange({ 
+      brands: selectedBrands, 
+      wrap: wrap.id, 
+      addOns: newAddOns,
+      label
+    }, options.baseCost + brandsPrice + wrap.price + newAddOnPrice);
   };
 
   return (
@@ -123,11 +237,26 @@ function ChocCustomiser({ options, onChange }) {
           {options.wrapping.map((w) => (
             <button key={w.id}
               className={`option-chip ${wrap.id === w.id ? 'option-chip--active' : ''}`}
-              onClick={() => handleWrapChange(w)}
-            >{w.label} <span>+₹{w.price}</span></button>
+              onClick={() => handleWrapChange(w)}>
+              {w.label} <span>+₹{w.price}</span>
+            </button>
           ))}
         </div>
       </div>
+      {options.addOns && (
+        <div className="form-group">
+          <label className="form-label">Add Extras</label>
+          <div className="addon-chips">
+            {options.addOns.map((addOn) => (
+              <button key={addOn.id}
+                className={`addon-chip ${addOns[addOn.id] ? 'addon-chip--active' : ''}`}
+                onClick={() => toggleAddOn(addOn.id)}>
+                {addOn.label} <span>+₹{addOn.price}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <p className="form-hint">Base craft fee (stick, foam, etc.): ₹{options.baseCost}</p>
       <div className="price-display">Total: <span>₹{price}</span></div>
     </div>
