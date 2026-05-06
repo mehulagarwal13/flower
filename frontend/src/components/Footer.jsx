@@ -52,6 +52,7 @@ export default function Footer() {
               <li><Link to="/products?cat=frames">Photo Frames</Link></li>
               <li><Link to="/products?cat=cards">Cards</Link></li>
               <li><Link to="/products?cat=hanky">Hankies</Link></li>
+              <li><Link to="/admin">Login as Admin</Link></li>
             </ul>
           </div>
 

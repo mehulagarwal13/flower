@@ -71,6 +71,17 @@
 .navbar__link:hover { color: var(--pink); }
 .navbar__link--active { color: var(--pink); font-weight: 700; }
 
+.navbar__link--profile {
+  flex-direction: row;
+  gap: 0.5rem;
+  padding: .45rem 1.2rem;
+  background: rgba(233, 30, 140, 0.1);
+}
+
+.navbar__link--profile:hover {
+  background: rgba(233, 30, 140, 0.15);
+}
+
 .navbar__link-underline {
   position: absolute;
   bottom: 4px;
@@ -84,6 +95,10 @@
 }
 .navbar__link:hover .navbar__link-underline,
 .navbar__link--active .navbar__link-underline { width: 60%; }
+
+.navbar__link--profile .navbar__link-underline {
+  display: none;
+}
 
 /* Actions */
 .navbar__actions { display: flex; align-items: center; gap: .75rem; }

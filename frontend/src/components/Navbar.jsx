@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ShoppingCart, Menu, X, Flower2 } from 'lucide-react';
+import { ShoppingCart, Menu, X, Flower2, User } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import './Navbar.css';
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [userName, setUserName] = useState('');
   const { count } = useCart();
   const location = useLocation();
 
@@ -16,13 +19,27 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => { setOpen(false); }, [location]);
+  useEffect(() => { 
+    setOpen(false);
+    const user = localStorage.getItem('user');
+    if (user) {
+      const parsedUser = JSON.parse(user);
+      setIsLoggedIn(true);
+      setIsAdmin(Boolean(parsedUser.is_admin));
+      setUserName(parsedUser.name);
+    } else {
+      setIsLoggedIn(false);
+      setIsAdmin(false);
+      setUserName('');
+    }
+  }, [location]);
 
   const links = [
     { to: '/', label: 'Home' },
     { to: '/products', label: 'Shop' },
     { to: '/products?cat=bouquets', label: 'Bouquets' },
     { to: '/products?cat=frames', label: 'Frames' },
+    { to: '/track-order', label: 'Track Order' },
   ];
 
   return (
@@ -44,10 +61,26 @@ export default function Navbar() {
               <span className="navbar__link-underline" />
             </Link>
           ))}
-          <Link to="/login" className="navbar__link">
-            Login
-            <span className="navbar__link-underline" />
-          </Link>
+          {isLoggedIn ? (
+            isAdmin ? (
+              <Link to="/admin/dashboard" className="navbar__link navbar__link--profile">
+                <User size={18} />
+                Admin Dashboard
+                <span className="navbar__link-underline" />
+              </Link>
+            ) : (
+              <Link to="/profile" className="navbar__link navbar__link--profile">
+                <User size={18} />
+                {userName}
+                <span className="navbar__link-underline" />
+              </Link>
+            )
+          ) : (
+            <Link to="/login" className="navbar__link">
+              Login
+              <span className="navbar__link-underline" />
+            </Link>
+          )}
         </nav>
 
         <div className="navbar__actions">

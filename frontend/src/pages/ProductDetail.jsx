@@ -1,10 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ShoppingCart, MessageCircle, ChevronLeft, Upload, Plus, Minus } from 'lucide-react';
 import { getProductById } from '../data/products';
 import { useCart } from '../context/CartContext';
 import { useToast } from '../context/ToastContext';
 import { WHATSAPP_NUMBER } from '../data/products';
+import { productAPI } from '../api';
+import { normalizeProduct } from '../utils/productMapper';
+import { PhotoFrameCustomiser } from '../components/PhotoFrameCustomiser';
+import { HandmadeCardCustomiser } from '../components/HandmadeCardCustomiser';
+import { EmbroideredHankyCustomiser } from '../components/EmbroideredHankyCustomiser';
+import { CabBookingCustomiser } from '../components/CabBookingCustomiser';
 import './ProductDetail.css';
 
 /* ── per-product customiser components ── */
@@ -299,16 +305,61 @@ const customisers = {
   'cab-booking':       CabCustomiser,
 };
 
+// Use new enhanced customisers for detailed products
+const enhancedCustomisers = {
+  'photo-frame':       PhotoFrameCustomiser,
+  'handmade-card':     HandmadeCardCustomiser,
+  'embroidered-hanky': EmbroideredHankyCustomiser,
+  'cab-booking':       CabBookingCustomiser,
+};
+
 export default function ProductDetail() {
   const { id } = useParams();
-  const product = getProductById(id);
   const { dispatch } = useCart();
   const { addToast } = useToast();
 
+  const [remoteProduct, setRemoteProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [activeImg, setActiveImg] = useState(0);
   const [qty, setQty] = useState(1);
   const [customOptions, setCustomOptions] = useState({});
-  const [customPrice, setCustomPrice] = useState(product?.startingPrice || 0);
+  const [customPrice, setCustomPrice] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+    setRemoteProduct(null);
+
+    productAPI.getById(id)
+      .then((response) => {
+        if (mounted) setRemoteProduct(normalizeProduct(response.data));
+      })
+      .catch(() => {
+        if (mounted) setRemoteProduct(null);
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => { mounted = false; };
+  }, [id]);
+
+  const fallbackProduct = getProductById(id);
+  const product = remoteProduct || fallbackProduct;
+
+  useEffect(() => {
+    if (product) {
+      setActiveImg(0);
+      setCustomOptions({});
+      setCustomPrice(product.startingPrice || 0);
+    }
+  }, [product?.id]);
+
+  if (loading && !product) return (
+    <div className="not-found container" style={{ paddingTop: '8rem', textAlign: 'center' }}>
+      <h2>Loading product...</h2>
+    </div>
+  );
 
   if (!product) return (
     <div className="not-found container" style={{ paddingTop: '8rem', textAlign: 'center' }}>
@@ -317,7 +368,7 @@ export default function ProductDetail() {
     </div>
   );
 
-  const Customiser = customisers[product.id];
+  const SelectedCustomiser = enhancedCustomisers[product.id] || customisers[product.id];
   const waMsg = `Hi! I'd like to order *${product.name}* from LoveKraft. Options: ${JSON.stringify(customOptions)}`;
 
   const handleAddToCart = () => {
@@ -371,10 +422,10 @@ export default function ProductDetail() {
             Starting from <strong>₹{product.startingPrice > 0 ? product.startingPrice : 'varies'}</strong>
           </div>
 
-          {Customiser && (
+          {SelectedCustomiser && (
             <div className="pd-customiser">
               <h4>Customise Your Order</h4>
-              <Customiser
+              <SelectedCustomiser
                 options={product.options}
                 onChange={(opts, price) => { setCustomOptions(opts); setCustomPrice(price); }}
               />

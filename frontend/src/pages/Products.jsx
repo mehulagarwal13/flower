@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import { products, categories } from '../data/products';
+import { productAPI } from '../api';
+import { normalizeProducts } from '../utils/productMapper';
 import ProductCard from '../components/ProductCard';
 import './Products.css';
 
@@ -10,13 +12,30 @@ export default function Products() {
   const [activeCat, setActiveCat] = useState('all');
   const [sort, setSort] = useState('default');
   const [search, setSearch] = useState('');
+  const [catalog, setCatalog] = useState([]);
 
   useEffect(() => {
     const cat = searchParams.get('cat');
     if (cat) setActiveCat(cat);
   }, [searchParams]);
 
-  const filtered = products
+  useEffect(() => {
+    let mounted = true;
+
+    productAPI.getAll()
+      .then((response) => {
+        if (mounted) setCatalog(normalizeProducts(response.data || []));
+      })
+      .catch(() => {
+        if (mounted) setCatalog([]);
+      });
+
+    return () => { mounted = false; };
+  }, []);
+
+  const source = catalog.length ? catalog : products;
+
+  const filtered = source
     .filter((p) => activeCat === 'all' || p.category === activeCat)
     .filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {

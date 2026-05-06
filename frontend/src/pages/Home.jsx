@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, Star, Truck, Shield, MessageCircle, Flower2, Camera, Gift, Wind, Sparkles } from 'lucide-react';
 import { products, WHATSAPP_NUMBER, WHATSAPP_MSG } from '../data/products';
+import { productAPI } from '../api';
+import { normalizeProducts } from '../utils/productMapper';
 import ProductCard from '../components/ProductCard';
 import AnimatedSection from '../components/AnimatedSection';
 import './Home.css';
@@ -31,7 +34,25 @@ const stats = [
 ];
 
 export default function Home() {
-  const featured = products.slice(0, 4);
+  const [catalog, setCatalog] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    productAPI.getAll()
+      .then((response) => {
+        if (mounted) setCatalog(normalizeProducts(response.data || []));
+      })
+      .catch(() => {
+        if (mounted) setCatalog([]);
+      });
+
+    return () => { mounted = false; };
+  }, []);
+
+  const featured = (catalog.length ? catalog : products).slice(0, 4);
+  const heroBouquet = featured[0]?.images?.[0] || '/images/product1.jpg';
+  const heroChocolate = featured[1]?.images?.[0] || '/images/product3.jpg';
 
   return (
     <div className="home">
@@ -88,7 +109,7 @@ export default function Home() {
           <div className="hero__visual float">
             <div className="hero__visual-card hero__visual-card--main">
               <img
-                src="/images/product1.jpg"
+                src={heroBouquet}
                 alt="Beautiful flower bouquet"
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -99,7 +120,7 @@ export default function Home() {
             </div>
             <div className="hero__visual-card hero__visual-card--side">
               <img
-                src="/images/product3.jpg"
+                src={heroChocolate}
                 alt="Chocolate bouquet"
                 onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.classList.add('hero__visual-card--placeholder'); }}
               />
